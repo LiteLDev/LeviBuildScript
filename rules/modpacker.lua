@@ -1,57 +1,67 @@
 rule("modpacker")
-    after_build(function (target)
+    after_build(function(target)
         local tag = os.iorun("git describe --tags --abbrev=0 --always")
         local major, minor, patch, suffix = tag:match("v(%d+)%.(%d+)%.(%d+)(.*)")
         if not major then
             print("Failed to parse version tag, using 0.0.0")
             major, minor, patch = 0, 0, 0
         end
-        local mod_define = {
-            modName = target:name(),
-            modFile = path.filename(target:targetfile()),
-            modVersion = major .. "." .. minor .. "." .. patch,
-        }
+        local mod_define = target:extraconf("rules", "@levibuildscript/modpacker")
+        mod_define = mod_define or {}
+        mod_define.modName = mod_define.modName or target:name()
+        mod_define.modFile = mod_define.modFile or path.filename(target:targetfile())
+        mod_define.modVersion = mod_define.modVersion or (major .. "." .. minor .. "." .. patch)
         function beautify_json(value, indent)
             import("core.base.json")
             local json_text = ""
             local stack = {}
-                
+
             local function escape_str(s)
                 return string.gsub(s, '[%c\\"]', function(c)
-                    local replacements = {['\b'] = '\\b', ['\f'] = '\\f', ['\n'] = '\\n', ['\r'] = '\\r', ['\t'] = '\\t', ['"'] = '\\"', ['\\'] = '\\\\'}
+                    local replacements = {
+                        ['\b'] = '\\b',
+                        ['\f'] = '\\f',
+                        ['\n'] = '\\n',
+                        ['\r'] = '\\r',
+                        ['\t'] = '\\t',
+                        ['"'] = '\\"',
+                        ['\\'] = '\\\\'
+                    }
                     return replacements[c] or string.format('\\u%04x', c:byte())
                 end)
             end
-        
+
             local function is_null(v)
                 return v == json.null
             end
-        
+
             local function is_empty_table(t)
-                if type(t) ~= 'table' then return false end
+                if type(t) ~= 'table' then
+                    return false
+                end
                 for _ in pairs(t) do
                     return false
                 end
                 return true
             end
-        
+
             local function is_array(t)
                 return type(t) == 'table' and json.is_marked_as_array(t) or #t > 0
             end
-        
+
             local function serialize(val, level)
                 local spaces = string.rep(" ", level * indent)
-            
+
                 if type(val) == "table" and not stack[val] then
                     if is_empty_table(val) then
                         json_text = json_text .. (is_array(val) and "[]" or "{}")
                         return
                     end
-                
+
                     stack[val] = true
                     local isArray = is_array(val)
                     json_text = json_text .. (isArray and "[\n" or "{\n")
-                
+
                     local keys = isArray and {} or {}
                     for k in pairs(val) do
                         table.insert(keys, k)
@@ -59,15 +69,16 @@ rule("modpacker")
                     if not isArray then
                         table.sort(keys)
                     end
-                
+
                     for _, k in ipairs(keys) do
                         local v = val[k]
                         json_text = json_text .. spaces .. (isArray and "" or '"' .. escape_str(tostring(k)) .. '": ')
                         serialize(v, level + 1)
                         json_text = json_text .. ",\n"
                     end
-                
-                    json_text = string.sub(json_text, 1, -3) .. "\n" .. string.rep(" ", (level - 1) * indent) .. (isArray and "]" or "}")
+
+                    json_text = string.sub(json_text, 1, -3) .. "\n" .. string.rep(" ", (level - 1) * indent) ..
+                                    (isArray and "]" or "}")
                     stack[val] = nil
                 elseif type(val) == "string" then
                     json_text = json_text .. '"' .. escape_str(val) .. '"'
@@ -88,16 +99,16 @@ rule("modpacker")
             serialize(value, 1)
             return json_text
         end
-        
+
         function string_formatter(str, variables)
             return str:gsub("%${(.-)}", function(var)
                 return variables[var] or "${" .. var .. "}"
             end)
         end
-        
-        function pack_mod(target,mod_define)
+
+        function pack_mod(target, mod_define)
             import("lib.detect.find_file")
-        
+
             local manifest_path = find_file("manifest.json", os.projectdir())
             if manifest_path then
                 local manifest = io.readfile(manifest_path)
@@ -108,20 +119,20 @@ rule("modpacker")
                 local manifestfile = path.join(outputdir, "manifest.json")
                 local oritargetfile = target:targetfile()
                 local oripdbfile = path.join(path.directory(oritargetfile), path.basename(oritargetfile) .. ".pdb")
-            
+
                 os.mkdir(outputdir)
                 os.cp(oritargetfile, targetfile)
                 if os.isfile(oripdbfile) then
                     os.cp(oripdbfile, pdbfile)
                 end
-            
+
                 formattedmanifest = string_formatter(manifest, mod_define)
-                io.writefile(manifestfile,formattedmanifest)
+                io.writefile(manifestfile, formattedmanifest)
                 cprint("${bright green}[Mod Packer]: ${reset}mod already generated to " .. outputdir)
             else
                 cprint("${bright yellow}warn: ${reset}not found manifest.json in root dir!")
             end
         end
 
-        pack_mod(target,mod_define)
+        pack_mod(target, mod_define)
     end)
