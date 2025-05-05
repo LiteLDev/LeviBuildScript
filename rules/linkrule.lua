@@ -11,7 +11,7 @@ before_link(function(target)
 
     import("core.project.config")
 
-    os.runv(link,
+    os.execv(link,
         table.join({vformat("%s-%s-%s", config.get("target_type") or "server", config.get("plat"), config.get("arch")),
                     vformat("$(buildir)/.prelink"), data}, target:objectfiles()))
     target:add("linkdirs", "$(buildir)/.prelink/lib")
