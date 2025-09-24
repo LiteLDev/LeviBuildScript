@@ -13,8 +13,8 @@ rule("linkrule")
         local arch = config.get("arch") or "x64"
         local target_type = config.get("target_type") or "server"
 
-        local buildir = config.buildir()
-        local outdir = path.join(buildir, ".prelink")
+        local builddir = config.builddir()
+        local outdir = path.join(builddir, ".prelink")
         local libdir = path.join(outdir, "lib")
 
         os.mkdir(libdir)
