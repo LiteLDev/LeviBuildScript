@@ -1,25 +1,50 @@
 rule("linkrule")
-on_config(function(target)
-    target:add("shflags", "/DELAYLOAD:bedrock_runtime.dll")
-end)
-before_link(function(target)
-    import("lib.detect.find_file")
-    os.mkdir("$(builddir)/.prelink/lib")
+    on_config(function(target)
+        target:add("shflags", "/DELAYLOAD:bedrock_runtime.dll")
+    end)
 
-    local data = assert(find_file("bedrock_runtime_data", {"$(env PATH)"}), "Cannot find bedrock_runtime_data")
-    local link = assert(find_file("prelink.exe", {"$(env PATH)"}), "Cannot find prelink.exe")
+    before_link(function(target)
+        print("Running prelink...")
 
-    import("core.project.config")
+        import("lib.detect.find_file")
+        import("core.project.config")
 
-    os.execv(link,
-        table.join({vformat("%s-%s-%s", config.get("target_type") or "server", config.get("plat"), config.get("arch")),
-                    vformat("$(builddir)/.prelink"), data}, target:objectfiles()))
-    target:add("linkdirs", "$(builddir)/.prelink/lib")
-    target:add("shflags", "bedrock_runtime_api.lib", {
-        force = true
-    })
-end)
-after_link(function(target)
-    os.rm("$(builddir)/.prelink/lib/*.lib")
-end)
+        local plat = config.get("plat") or "windows"
+        local arch = config.get("arch") or "x64"
+        local target_type = config.get("target_type") or "server"
+
+        local buildir = config.buildir()
+        local outdir = path.join(buildir, ".prelink")
+        local libdir = path.join(outdir, "lib")
+
+        os.mkdir(libdir)
+
+        local data = assert(find_file("bedrock_runtime_data", {"$(env PATH)"}), "Cannot find bedrock_runtime_data")
+        local link = assert(find_file("prelink.exe", {"$(env PATH)"}), "Cannot find prelink.exe")
+
+        local inputs = table.copy(target:objectfiles())
+
+        for _, dep in ipairs(target:orderdeps()) do
+            if dep:kind() == "static" then
+                local libfile = dep:targetfile()
+                if libfile and os.isfile(libfile) then
+                    table.insert(inputs, libfile)
+                end
+            end
+        end
+
+        os.execv(link, {
+            string.format("%s-%s-%s", target_type, plat, arch),
+            outdir,
+            data,
+            table.unpack(inputs)
+        })
+
+        target:add("linkdirs", libdir)
+        target:add("links", "bedrock_runtime_api")
+    end)
+
+    after_link(function(target)
+        os.rm("$(builddir)/.prelink/lib/*.lib")
+    end)
 rule_end()
