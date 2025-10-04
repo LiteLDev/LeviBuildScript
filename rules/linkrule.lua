@@ -32,6 +32,17 @@ rule("linkrule")
                 end
             end
         end
+        for _, pkg in ipairs(target:orderpkgs()) do
+            for _, linkdir in ipairs(pkg:get("linkdirs")) do
+                for _, link in pairs(pkg:get("links")) do
+                    local libfile = path.join(linkdir, link .. ".lib")
+                    if os.isfile(libfile) then
+                        table.insert(inputs, libfile)
+                        print(libfile)
+                    end
+                end
+            end
+        end
 
         os.execv(link, {
             string.format("%s-%s-%s", target_type, plat, arch),
