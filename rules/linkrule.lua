@@ -19,8 +19,10 @@ rule("linkrule")
 
         os.mkdir(libdir)
 
-        local data = assert(find_file("bedrock_runtime_data", {"$(env PATH)"}), "Cannot find bedrock_runtime_data")
-        local link = assert(find_file("prelink.exe", {"$(env PATH)"}), "Cannot find prelink.exe")
+    local envs = os.joinenvs(target:pkgenvs(), os.getenvs())
+    local searchpaths = path.splitenv(envs.PATH or envs.Path or envs.path or "")
+    local data = assert(find_file("bedrock_runtime_data", searchpaths), "Cannot find bedrock_runtime_data")
+    local link = assert(find_file("prelink.exe", searchpaths), "Cannot find prelink.exe")
 
         local inputs = table.copy(target:objectfiles())
 
