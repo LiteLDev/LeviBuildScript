@@ -4,10 +4,10 @@ rule("linkrule")
     end)
 
     before_link(function(target)
-        print("Running prelink...")
-
         import("lib.detect.find_file")
         import("core.project.config")
+        import("core.project.depend")
+        import("core.base.option")
 
         local plat = config.get("plat") or "windows"
         local arch = config.get("arch") or "x64"
@@ -40,17 +40,26 @@ rule("linkrule")
                     local libfile = path.join(linkdir, link .. ".lib")
                     if os.isfile(libfile) then
                         table.insert(inputs, libfile)
-                        print(libfile)
+                        --print(libfile)
                     end
                 end
             end
         end
 
-        os.execv(link, {
-            string.format("%s-%s-%s", target_type, plat, arch),
-            outdir,
-            data,
-            table.unpack(inputs)
+        -- wrap the expensive prelink step with depend.on_changed
+        depend.on_changed(function ()
+            print("Running prelink...")
+
+            os.execv(link, {
+                string.format("%s-%s-%s", target_type, plat, arch),
+                outdir,
+                data,
+                table.unpack(inputs)
+            })
+        end, {
+            changed = target:is_rebuilt(),
+            values = { link, data },
+            files = inputs
         })
 
         target:add("linkdirs", libdir)
